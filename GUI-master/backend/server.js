@@ -207,7 +207,8 @@ function startSimulator() {
 }
 
 function handleSerialData(data) {
-  const line = data.toString().trim();
+  const line = data.toString().replace(/[\x00-\x1F\x7F]/g, '').trim();
+  if (!line) return;
 
   if (line.startsWith('ACK,046,')) {
     console.log('<<< ACK RECEIVED FROM ESP32:', line);
@@ -231,14 +232,32 @@ function handleSerialData(data) {
   if (rxMatch) {
     const rxStart = line.indexOf('RX,', rxMatch.index);
     const values = line.slice(rxStart).split(',').map((value) => value.trim());
+
+    if (values.some((value) => /^(ACK|NAK|CMD)$/i.test(value))) {
+      console.log('<<< SYSTEM MESSAGE FROM ESP32:', line);
+      io.emit('command_response', { response: line });
+      return;
+    }
+
     if (values.length !== 21 || values[3] !== '046') {
       console.warn('Ignoring malformed RX telemetry packet:', line);
       return;
     }
 
     const stateNumber = Number(values[17]);
-    const acceleration = values[15].split(';').map(Number);
-    const magnetometer = values[18].split(';').map(Number);
+    const parseOptionalVector = (value, length) => {
+      if (!value) return Array(length).fill(0);
+
+      const components = value.split(/[;|]/).map((component) => component.trim());
+      if (components.length > length) return null;
+
+      const parsed = components.map((component) => component ? Number(component) : 0);
+      if (!parsed.every(Number.isFinite)) return null;
+
+      return [...parsed, ...Array(length - parsed.length).fill(0)];
+    };
+    const acceleration = parseOptionalVector(values[15], 5);
+    const magnetometer = parseOptionalVector(values[18], 3);
     const spinRate = Number(values[16]);
     const rssi = Number(values[19]);
     const snr = Number(values[20]);
@@ -262,8 +281,8 @@ function handleSerialData(data) {
       !Number.isFinite(Number(values[2])) ||
       !Number.isInteger(packetCountValue) ||
       !Number.isInteger(gnssSats) ||
-      acceleration.length !== 5 ||
-      magnetometer.length !== 3 ||
+      !acceleration ||
+      !magnetometer ||
       ![
         ...acceleration,
         ...magnetometer,
