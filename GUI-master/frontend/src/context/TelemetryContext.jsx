@@ -199,7 +199,6 @@ export function TelemetryProvider({ children }) {
   const [cmdResponse, setCmdResponse] = useState('')
   const socketRef = useRef(null)
   const pendingUplinkCommand = useRef(null)
-  const telemetryWatchdog = useRef(null)
 
   const sendUplinkCommand = useCallback((commandString) => {
     const socket = socketRef.current
@@ -248,23 +247,7 @@ export function TelemetryProvider({ children }) {
     }
     const handleTelemetryUpdate = (data) => {
       if (data && typeof data === 'object') {
-        window.clearTimeout(telemetryWatchdog.current)
-        setState((previous) => {
-          const next = updateTelemetryState(previous, data)
-          return {
-            ...next,
-            communication: { ...next.communication, connected: true },
-          }
-        })
-        telemetryWatchdog.current = window.setTimeout(() => {
-          setState((previous) => {
-            if (!previous.communication.connected) return previous
-            return {
-              ...previous,
-              communication: { ...previous.communication, connected: false },
-            }
-          })
-        }, 5000)
+        setState((previous) => updateTelemetryState(previous, data))
       }
     }
     const handleCommandResponse = (payload) => {
@@ -276,18 +259,13 @@ export function TelemetryProvider({ children }) {
         setCmdResponse(payload.message)
       }
     }
-    socket.on('uplink_status', handleUplinkStatus)
-    socket.on('command_ack', handleCommandAck)
-    socket.on('command_response', handleCommandResponse)
-    socket.on('new_data', handleTelemetryUpdate)
-    socket.on('telemetry_update', handleTelemetryUpdate)
-    socket.on('raw_data', (rawData) => {
+    const handleRawData = (rawData) => {
       setState((previous) => ({
         ...previous,
         communication: { ...previous.communication, rawData: String(rawData) },
       }))
-    })
-    socket.on('serial_config', (config) => {
+    }
+    const handleSerialConfig = (config) => {
       setState((previous) => ({
         ...previous,
         port: config.port ?? previous.port,
@@ -300,9 +278,14 @@ export function TelemetryProvider({ children }) {
           },
         },
       }))
-    })
-    socket.on('disconnect', () => {
-      window.clearTimeout(telemetryWatchdog.current)
+    }
+    const handleConnect = () => {
+      setState((previous) => ({
+        ...previous,
+        communication: { ...previous.communication, connected: true },
+      }))
+    }
+    const handleDisconnect = () => {
       if (pendingUplinkCommand.current) {
         pendingUplinkCommand.current = null
         setUplinkStatus('error')
@@ -311,14 +294,26 @@ export function TelemetryProvider({ children }) {
         ...previous,
         communication: { ...previous.communication, connected: false },
       }))
-    })
+    }
+    socket.on('uplink_status', handleUplinkStatus)
+    socket.on('command_ack', handleCommandAck)
+    socket.on('command_response', handleCommandResponse)
+    socket.on('new_data', handleTelemetryUpdate)
+    socket.on('telemetry_update', handleTelemetryUpdate)
+    socket.on('raw_data', handleRawData)
+    socket.on('serial_config', handleSerialConfig)
+    socket.on('connect', handleConnect)
+    socket.on('disconnect', handleDisconnect)
     return () => {
       socket.off('uplink_status', handleUplinkStatus)
       socket.off('command_ack', handleCommandAck)
       socket.off('command_response', handleCommandResponse)
       socket.off('new_data', handleTelemetryUpdate)
       socket.off('telemetry_update', handleTelemetryUpdate)
-      window.clearTimeout(telemetryWatchdog.current)
+      socket.off('raw_data', handleRawData)
+      socket.off('serial_config', handleSerialConfig)
+      socket.off('connect', handleConnect)
+      socket.off('disconnect', handleDisconnect)
       socketRef.current = null
       socket.disconnect()
     }
