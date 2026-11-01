@@ -43,6 +43,7 @@ function ImuChart({ title, fields }) {
       <div className="gyro-chart h-full min-h-0">
         <Line
           data={data}
+          updateMode="none"
           options={{
             animation: false,
             responsive: true,
@@ -137,11 +138,7 @@ function Gyro() {
             title="Accelerometer"
           />
           <ImuChart
-            fields={[
-              { key: 'gyroX', label: 'Gyro_X' },
-              { key: 'gyroY', label: 'Gyro_Y' },
-              { key: 'gyroZ', label: 'Gyro_Z' },
-            ]}
+            fields={[{ key: 'spinRate', label: 'Spin Rate' }]}
             title="Gyroscope"
           />
           <ImuChart

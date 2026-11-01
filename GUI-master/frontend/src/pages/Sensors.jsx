@@ -15,7 +15,7 @@ const sensorCards = [
     label: 'Pressure',
     metric: 'pressure',
     color: '#FB923C',
-    unit: 'hPa',
+    unit: 'Pa',
     valueKey: 'pressure',
     digits: 2,
   },

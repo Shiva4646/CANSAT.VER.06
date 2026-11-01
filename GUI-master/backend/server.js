@@ -4,7 +4,8 @@ const path = require('path');
 const app = express();
 const server = require('http').createServer(app);
 const io = require('socket.io')(server, {
-  cors: { origin: "*" }
+  cors: { origin: "*" },
+  transports: ['websocket'],
 });
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
@@ -321,7 +322,9 @@ function handleSerialData(data) {
       snr,
     };
 
-    console.log('Parsed RX telemetry:', parsedTelemetry);
+    if (process.env.DEBUG_TELEMETRY === 'true') {
+      console.log('Parsed RX telemetry:', parsedTelemetry);
+    }
     const csvRow = [
       values[1],
       values[2],
@@ -503,7 +506,9 @@ function handleSerialData(data) {
         telemetryData.data_rate = "0.0";
       }
 
-      console.log('Parsed telemetry:', telemetryData);
+      if (process.env.DEBUG_TELEMETRY === 'true') {
+        console.log('Parsed telemetry:', telemetryData);
+      }
       io.emit("new_data", telemetryData);
       io.emit("raw_data", rawData);
   } catch (error) {

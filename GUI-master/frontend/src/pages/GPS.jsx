@@ -3,7 +3,7 @@ import GPSMap from '../components/GPSMap'
 import { useTelemetry } from '../context/TelemetryContext'
 
 function GPS() {
-  const { gps, telemetry } = useTelemetry()
+  const { gps, gnssAlt, gnssTime } = useTelemetry()
   return (
     <section className="page">
       <header className="route-banner">
@@ -28,11 +28,15 @@ function GPS() {
             </div>
             <div className="metric-row">
               <span className="metric-label">Altitude</span>
-              <strong className="metric-value">{telemetry.altitude.toFixed(2)} m</strong>
+              <strong className="metric-value">{gnssAlt.toFixed(2)} m</strong>
             </div>
             <div className="metric-row">
               <span className="metric-label">Satellites</span>
               <strong className="metric-value">{gps.satellites}</strong>
+            </div>
+            <div className="metric-row">
+              <span className="metric-label">GNSS Time</span>
+              <strong className="metric-value">{gnssTime}</strong>
             </div>
           </div>
         </div>

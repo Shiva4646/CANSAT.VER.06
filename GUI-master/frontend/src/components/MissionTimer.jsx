@@ -17,7 +17,16 @@ const formatElapsedTime = (timestampSeconds) => {
 }
 
 function MissionTimer({ onDownloadLog }) {
-  const { communication, rssi, teamName, teamId, missionTimestamp, missionTime } = useTelemetry()
+  const {
+    communication,
+    rssi,
+    snr,
+    flightState,
+    teamName,
+    teamId,
+    missionTimestamp,
+    gnssTime,
+  } = useTelemetry()
 
   return (
     <div className="mission-topbar" aria-label="Mission status">
@@ -28,7 +37,9 @@ function MissionTimer({ onDownloadLog }) {
       </div>
       <div className="mission-link-status">
         <span className={`status-dot${communication.connected ? ' is-connected' : ''}`} />
-        <span>{communication.connected ? 'LIVE' : 'OFFLINE'} · {rssi} dBm</span>
+        <span>
+          {communication.connected ? 'LIVE' : 'OFFLINE'} · STATE {flightState} · RSSI {rssi} dBm · SNR {snr} dB
+        </span>
         <strong className={communication.connected ? 'is-connected' : 'is-disconnected'}>
           {communication.connected ? 'CONNECTED' : 'DISCONNECTED'}
         </strong>
@@ -46,7 +57,7 @@ function MissionTimer({ onDownloadLog }) {
       </div>
       <div className="mission-readouts">
         <span>T+ {formatElapsedTime(missionTimestamp)}</span>
-        <span>GNSS {missionTime}</span>
+        <span>GNSS {gnssTime}</span>
       </div>
     </div>
   )

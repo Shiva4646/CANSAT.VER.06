@@ -1,0 +1,1 @@
+esp_ms,packet_length,team_id,time_s,packet_count,altitude_m,pressure_pa,temp_c,volt_v,gnss_time,latitude,longitude,gnss_alt_m,sats,ax,ay,az,roll,pitch,spin_rate,flight_state,mx,my,mz,rssi_dbm,snr_db

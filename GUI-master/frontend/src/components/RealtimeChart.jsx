@@ -58,11 +58,12 @@ function RealtimeChart({
     <div className="realtime-chart" style={{ height }}>
       <Line
         data={data}
+        updateMode="none"
         options={{
-          animation: false,
           responsive: true,
           maintainAspectRatio: false,
           ...chartOptions,
+          animation: false,
           interaction: {
             mode: 'index',
             intersect: false,

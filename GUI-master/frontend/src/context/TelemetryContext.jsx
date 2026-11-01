@@ -13,8 +13,12 @@ const TelemetryContext = createContext(null)
 
 const initialTelemetryState = {
   teamName: 'SAIRAM STRATOS',
-  teamId: '2024ASI-052',
+  teamId: '046',
   rssi: -50,
+  snr: 0,
+  flightState: '--',
+  flightStateId: null,
+  spinRate: 0,
   motionState: 'TUMBLING',
   batteryVoltage: 0,
   gasResistance: 0,
@@ -22,6 +26,7 @@ const initialTelemetryState = {
   gnssLat: 0,
   gnssLon: 0,
   gnssAlt: 0,
+  gnssTime: '--',
   primaryParachute: '--',
   secondaryParachute: '--',
   port: 'COM 8',
@@ -72,7 +77,7 @@ const updateTelemetryState = (previous, data) => {
   const voltage = toNumber(firstDefined(data.battery_voltage, data.voltage), previous.batteryVoltage)
   const latitude = toNumber(firstDefined(data.latitude, data.lat, data.gnss_lat), previous.gnssLat)
   const longitude = toNumber(firstDefined(data.longitude, data.lon, data.gnss_lon), previous.gnssLon)
-  const gnssAlt = toNumber(firstDefined(data.gnss_altitude, data.gnssAlt, altitude), previous.gnssAlt)
+  const gnssAlt = toNumber(firstDefined(data.gnss_altitude, data.gnssAlt), previous.gnssAlt)
   const packetCount = toNumber(
     firstDefined(data.packet_count, data.packetCount),
     previous.packetCount + 1,
@@ -82,7 +87,22 @@ const updateTelemetryState = (previous, data) => {
     teamName: data.team_name ?? data.teamName ?? previous.teamName,
     teamId: data.team_id ?? data.teamId ?? previous.teamId,
     rssi: toNumber(firstDefined(data.rssi, data.signal), previous.rssi),
-    motionState: data.motion_state ?? data.motionState ?? previous.motionState,
+    snr: toNumber(data.snr, previous.snr),
+    flightState: data.flight_state ?? data.flightState ?? previous.flightState,
+    flightStateId: toNumber(
+      firstDefined(data.flight_state_id, data.flightStateId),
+      previous.flightStateId,
+    ),
+    spinRate: toNumber(
+      firstDefined(data.spin_rate, data.gyro_spin_rate, data.spinRate),
+      previous.spinRate,
+    ),
+    motionState:
+      data.motion_state ??
+      data.motionState ??
+      data.flight_state ??
+      data.flightState ??
+      previous.motionState,
     batteryVoltage: voltage,
     gasResistance: toNumber(
       firstDefined(data.gas_resistance, data.gasResistance),
@@ -97,7 +117,10 @@ const updateTelemetryState = (previous, data) => {
     port: data.port ?? data.serial_port ?? previous.port,
     baudRate: toNumber(data.baudRate ?? data.baud_rate, previous.baudRate),
     packetCount,
-    missionTimestamp: toNumber(data.timestamp, previous.missionTimestamp ?? 0),
+    missionTimestamp: toNumber(
+      firstDefined(data.mission_time, data.timestamp),
+      previous.missionTimestamp ?? 0,
+    ),
     telemetry: { altitude, pressure, temperature, voltage },
     gyroscope: {
       pitch: toNumber(firstDefined(data.pitch, data.gyro_y), previous.gyroscope.pitch),
@@ -107,8 +130,15 @@ const updateTelemetryState = (previous, data) => {
     gps: {
       latitude,
       longitude,
-      satellites: toNumber(data.satellites, previous.gps.satellites),
+      satellites: toNumber(
+        firstDefined(data.gnss_sats, data.satellites),
+        previous.gps.satellites,
+      ),
     },
+    gnssTime:
+      typeof data.gnss_time === 'string'
+        ? data.gnss_time
+        : previous.gnssTime,
     accelerometer: {
       x: toNumber(firstDefined(data.accel_x, data.accelX), previous.accelerometer.x),
       y: toNumber(firstDefined(data.accel_y, data.accelY), previous.accelerometer.y),
@@ -120,7 +150,7 @@ const updateTelemetryState = (previous, data) => {
       z: toNumber(firstDefined(data.mag_z, data.magZ), previous.magnetometer.z),
     },
     missionTime: formatMissionTime(
-      data.missionTime ?? data.mission_time ?? data.gnss_time,
+      data.mission_time ?? data.missionTime,
     ),
     history: [
       ...previous.history,
@@ -144,6 +174,10 @@ const updateTelemetryState = (previous, data) => {
         gyroX: toNumber(firstDefined(data.gyro_x, data.gyroX), previous.gyroscope.roll),
         gyroY: toNumber(firstDefined(data.gyro_y, data.gyroY), previous.gyroscope.pitch),
         gyroZ: toNumber(firstDefined(data.gyro_z, data.gyroZ), previous.gyroscope.yaw),
+        spinRate: toNumber(
+          firstDefined(data.spin_rate, data.gyro_spin_rate, data.spinRate),
+          previous.spinRate,
+        ),
         magX: toNumber(firstDefined(data.mag_x, data.magX), previous.magnetometer.x),
         magY: toNumber(firstDefined(data.mag_y, data.magY), previous.magnetometer.y),
         magZ: toNumber(firstDefined(data.mag_z, data.magZ), previous.magnetometer.z),
@@ -165,7 +199,7 @@ export function TelemetryProvider({ children }) {
   const [cmdResponse, setCmdResponse] = useState('')
   const socketRef = useRef(null)
   const pendingUplinkCommand = useRef(null)
-  const lastPacketTime = useRef(0)
+  const telemetryWatchdog = useRef(null)
 
   const sendUplinkCommand = useCallback((commandString) => {
     const socket = socketRef.current
@@ -185,6 +219,7 @@ export function TelemetryProvider({ children }) {
 
   useEffect(() => {
     const socket = io('http://localhost:3000', {
+      transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
     })
@@ -213,7 +248,7 @@ export function TelemetryProvider({ children }) {
     }
     const handleTelemetryUpdate = (data) => {
       if (data && typeof data === 'object') {
-        lastPacketTime.current = Date.now()
+        window.clearTimeout(telemetryWatchdog.current)
         setState((previous) => {
           const next = updateTelemetryState(previous, data)
           return {
@@ -221,6 +256,15 @@ export function TelemetryProvider({ children }) {
             communication: { ...next.communication, connected: true },
           }
         })
+        telemetryWatchdog.current = window.setTimeout(() => {
+          setState((previous) => {
+            if (!previous.communication.connected) return previous
+            return {
+              ...previous,
+              communication: { ...previous.communication, connected: false },
+            }
+          })
+        }, 5000)
       }
     }
     const handleCommandResponse = (payload) => {
@@ -257,13 +301,8 @@ export function TelemetryProvider({ children }) {
         },
       }))
     })
-    socket.on('connect', () => {
-      setState((previous) => ({
-        ...previous,
-        communication: { ...previous.communication, connected: true },
-      }))
-    })
     socket.on('disconnect', () => {
+      window.clearTimeout(telemetryWatchdog.current)
       if (pendingUplinkCommand.current) {
         pendingUplinkCommand.current = null
         setUplinkStatus('error')
@@ -279,25 +318,10 @@ export function TelemetryProvider({ children }) {
       socket.off('command_response', handleCommandResponse)
       socket.off('new_data', handleTelemetryUpdate)
       socket.off('telemetry_update', handleTelemetryUpdate)
+      window.clearTimeout(telemetryWatchdog.current)
       socketRef.current = null
       socket.disconnect()
     }
-  }, [])
-
-  useEffect(() => {
-    const watchdog = window.setInterval(() => {
-      if (Date.now() - lastPacketTime.current > 3000) {
-        setState((previous) => {
-          if (!previous.communication.connected) return previous
-          return {
-            ...previous,
-            communication: { ...previous.communication, connected: false },
-          }
-        })
-      }
-    }, 1000)
-
-    return () => window.clearInterval(watchdog)
   }, [])
 
   const contextValue = useMemo(

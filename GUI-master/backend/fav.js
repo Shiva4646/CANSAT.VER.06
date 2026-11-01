@@ -26,7 +26,8 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 const io = require('socket.io')(3000, {
-  cors: { origin: "*" }
+  cors: { origin: "*" },
+  transports: ['websocket'],
 });
 
 const temperatureValues = [22.98, 23.00, 23.02];

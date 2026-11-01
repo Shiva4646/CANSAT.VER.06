@@ -48,7 +48,7 @@ function StatusBadge({ label, value }) {
     <div className={`recovery-status ${deployed ? 'is-deployed' : ''}`}>
       <span className="recovery-status-dot" />
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong className={deployed ? 'text-green-400' : ''}>{value}</strong>
     </div>
   )
 }
@@ -62,6 +62,7 @@ function ImuChart({ title, fields }) {
       <h3>{title}</h3>
       <div className="dashboard-imu-chart">
         <Line
+          updateMode="none"
           data={{
             labels: points.map((point) =>
               new Date(point.timestamp).toLocaleTimeString('en-GB'),
@@ -118,6 +119,13 @@ function Dashboard() {
   const telemetry = useTelemetry()
 
   const { telemetry: values, gyroscope } = telemetry
+  const flightStateId = telemetry.flightStateId
+  const primaryParachute = Number.isInteger(flightStateId)
+    ? flightStateId >= 4 ? 'DEPLOYED' : 'STOWED'
+    : '--'
+  const secondaryParachute = Number.isInteger(flightStateId)
+    ? flightStateId >= 6 ? 'DEPLOYED' : 'STOWED'
+    : '--'
 
   return (
     <section className="dashboard-page reference-dashboard">
@@ -126,7 +134,7 @@ function Dashboard() {
           <div className="dashboard-chart-card">
             <div className="dashboard-chart-header pl-3">
               <h3>Pressure</h3>
-              <span>{formatNumber(values.pressure)} hPa</span>
+              <span>{formatNumber(values.pressure)} Pa</span>
             </div>
             <RealtimeChart
               chartOptions={{
@@ -137,7 +145,7 @@ function Dashboard() {
               color="#22D3EE"
               label="Pressure"
               metric="pressure"
-              unit="hPa"
+              unit="Pa"
             />
           </div>
           <div className="dashboard-chart-card">
@@ -206,11 +214,11 @@ function Dashboard() {
             <h3>Recovery System</h3>
             <StatusBadge
               label="Primary"
-              value={telemetry.primaryParachute || '--'}
+              value={primaryParachute}
             />
             <StatusBadge
               label="Secondary"
-              value={telemetry.secondaryParachute || '--'}
+              value={secondaryParachute}
             />
           </div>
         </section>
@@ -276,11 +284,7 @@ function Dashboard() {
           title="Accelerometer"
         />
         <ImuChart
-          fields={[
-            { key: 'gyroX', label: 'X' },
-            { key: 'gyroY', label: 'Y' },
-            { key: 'gyroZ', label: 'Z' },
-          ]}
+          fields={[{ key: 'spinRate', label: 'Spin Rate' }]}
           title="Gyroscope"
         />
         <ImuChart
